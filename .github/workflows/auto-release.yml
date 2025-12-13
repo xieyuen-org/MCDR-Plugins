@@ -1,4 +1,4 @@
-name: Sync Upstream Release and Create Release
+name: Sync Upstream and Create Release
 
 on:
   repository_dispatch:
