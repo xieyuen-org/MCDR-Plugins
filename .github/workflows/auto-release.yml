@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install MCDReforged
+      - name: Install Dependency
         run: |
           pip install mcdreforged
 
@@ -53,7 +53,11 @@ jobs:
         shell: pwsh
         run: |
           if ("${{ env.IS_PRERELEASE }}" -eq "true") {
-            $branch = "dev/${{ env.PLUGIN_ID }}"
+            if ("${{ env.PLUGIN_ID }}" -eq "mcdrpost") {
+              $branch = "dev/MCDRpost"
+            } else {
+              $branch = "dev/${{ env.PLUGIN_ID }}"
+            }
           } else {
             $branch = "master"
           }
