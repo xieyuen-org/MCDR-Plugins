@@ -1,0 +1,93 @@
+name: Sync Upstream Release and Create Release
+
+on:
+  repository_dispatch:
+    types: [upstream-tag-created]
+
+jobs:
+  sync-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install MCDReforged
+        run: |
+          pip install mcdreforged
+
+      - name: Parse Tag Name
+        id: parse_tag
+        shell: pwsh
+        run: |
+          $tagName = "${{ github.event.client_payload.tag }}"
+          Write-Host "Received tag: $tagName"
+          
+          # Extract plugin ID and semantic version using regex
+          if ($tagName -match '^([^-]+)-v(.+)$') {
+            $pluginId = $matches[1]
+            $semanticVersion = $matches[2]
+            
+            echo "PLUGIN_ID=$pluginId" >> $env:GITHUB_ENV
+            echo "SEMANTIC_VERSION=$semanticVersion" >> $env:GITHUB_ENV
+            
+            # Check if it's a prerelease by checking for hyphen or plus in the version part
+            if ($semanticVersion -match ".*-.*" -or $semanticVersion -match ".*\+.*") {
+              echo "IS_PRERELEASE=true" >> $env:GITHUB_ENV
+            } else {
+              echo "IS_PRERELEASE=false" >> $env:GITHUB_ENV
+            }
+          } else {
+            Write-Error "Tag format invalid: $tagName"
+            exit 1
+          }
+
+      - name: Determine Branch
+        id: determine_branch
+        shell: pwsh
+        run: |
+          if ("${{ env.IS_PRERELEASE }}" -eq "true") {
+            $branch = "dev/${{ env.PLUGIN_ID }}"
+          } else {
+            $branch = "master"
+          }
+          echo "BRANCH=$branch" >> $env:GITHUB_ENV
+
+      - name: Switch to Correct Branch
+        run: |
+          git fetch origin ${{ env.BRANCH }}:${{ env.BRANCH }}
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to fetch branch ${{ env.BRANCH }}"
+            exit 1
+          }
+          git checkout ${{ env.BRANCH }}
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Branch ${{ env.BRANCH }} does not exist"
+            exit 1
+          }
+
+      - name: Run Pack Script
+        shell: pwsh
+        run: |
+          ./scripts/pack.ps1 -PluginId "${{ env.PLUGIN_ID }}"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PLUGIN_ID }}-v${{ env.SEMANTIC_VERSION }}.mcdr
+          path: dist/${{ env.PLUGIN_ID }}-v${{ env.SEMANTIC_VERSION }}.mcdr
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.event.client_payload.tag }}
+          artifacts: "dist/${{ env.PLUGIN_ID }}-v${{ env.SEMANTIC_VERSION }}.mcdr"
+          generateReleaseNotes: true
+          prerelease: ${{ env.IS_PRERELEASE }}
+          makeLatest: ${{ !env.IS_PRERELEASE }}
