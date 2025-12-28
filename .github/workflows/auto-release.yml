@@ -55,6 +55,7 @@ jobs:
           if ("${{ env.IS_PRERELEASE }}" -eq "true") {
             if ("${{ env.PLUGIN_ID }}" -eq "mcdrpost") {
               $branch = "dev/MCDRpost"
+              echo "PluginName=MCDRpost" >> $env:GITHUB_ENV
             } else {
               $branch = "dev/${{ env.PLUGIN_ID }}"
             }
@@ -79,7 +80,7 @@ jobs:
       - name: Run Pack Script
         shell: pwsh
         run: |
-          ./scripts/pack.ps1 -PluginId "${{ env.PLUGIN_ID }}"
+          ./scripts/pack.ps1 "${{ env.PluginName }}"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
